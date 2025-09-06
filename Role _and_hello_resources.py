@@ -18,13 +18,22 @@ class MyClient(discord.Client):
 
         if message.content.startswith('!hello'):
             await message.reply('Hello!', mention_author=True)
+        if message.content.startswith("!calculate"):
+            await message.reply("resources: !youtube, !wiki, !guide ")
+        if message.content.startswith("!youtube"):
+            await message.reply("link")
+        if message.content.startswith("!wiki"):
+            await message.reply("link")
+        if message.content.startswith("!guide"):
+            await message.reply("link")
+    
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.role_message_id = 1411428606382444708  # ID of the message that can be reacted to to add/remove a role.
+        self.role_message_id = message id  # ID of the message that can be reacted to to add/remove a role.
         self.emoji_to_role = {
-            discord.PartialEmoji(name='🔴'): role id ,  
+            discord.PartialEmoji(name='🔴'): role id,  
             discord.PartialEmoji(name='🟡'): role id, 
         }
 
@@ -100,4 +109,6 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 client = MyClient(intents=intents)
-client.run('Token ID')
+client.run('token')
+
+
