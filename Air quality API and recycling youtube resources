@@ -1,0 +1,202 @@
+# This example requires the 'message_content' privileged intent to function.
+
+import discord
+import os
+import requests
+class MyClient(discord.Client):
+    # Suppress error on the User attribute being None since it fills up later
+    user: discord.ClientUser
+
+    async def on_ready(self):
+        print(f'Logged in as {self.user} (ID: {self.user.id})')
+        print('------')
+    
+    async def on_message(self, message):
+        # we do not want the bot to reply to itself
+        if message.author.id == self.user.id:
+            return
+
+        if message.content.startswith('!hello'):
+            await message.reply('Hello!', mention_author=True)
+        if message.content.startswith("!resources"):
+            await message.reply("resources: !youtube, !wiki, !guide, !air quality ")
+        if message.content.startswith("!youtube"):
+            await message.reply("https://www.youtube.com/playlist?list=PLymosQ-jUlF0tgsPPzrXPGPIB1vXqqjZf")
+        if message.content.startswith("!wiki"):
+            await message.reply("link")
+        if message.content.startswith("!guide"):
+            await message.reply("link")
+        if message.content.startswith("let that sink in"):
+             with open('let_that_sink_in.jpg',"rb") as f:
+                picture = discord.File(f)
+                await message.reply(file=picture)
+        if message.content.startswith("!calendar"):
+             with open('MDCPS Calendar 25-26.png',"rb") as f:
+                picture = discord.File(f)
+                await message.reply(file=picture)
+        if message.content.startswith("!duck"):
+            url = 'https://random-d.uk/api/random'
+            res = requests.get(url)
+            if res.status_code == 200:
+                data = res.json()
+                await message.reply(data['url'])
+            else:
+                await message.reply("Couldn't fetch a duck 🐤")
+        if message.content.startswith("!air quality"):
+            parts = message.content.split(" ", 2)
+            if len(parts) < 3:
+                await message.reply("Please provide a city. Example: `!air quality Miami`")
+                return
+
+            city_name = parts[2]
+
+            # Use the city_name in the geocoding API
+            geocode_url = f'https://api.opencagedata.com/geocode/v1/json?key=key={city_name}&pretty=1&no_annotations=1'
+            
+            geo_res = requests.get(geocode_url)
+            if geo_res.status_code != 200:
+                await message.reply("Couldn't reach geocoding service.")
+                return
+
+            geo_data = geo_res.json()
+            if not geo_data['results']:
+                await message.reply(f"Couldn't find the city `{city_name}`.")
+                return
+
+            # Get lat/lon from geocoding response
+            lat = geo_data['results'][0]['geometry']['lat']
+            lon = geo_data['results'][0]['geometry']['lng']
+            city_formatted = geo_data['results'][0]['formatted']
+
+            # Format air quality API URL correctly
+            aq_url = f'https://air-quality-api.open-meteo.com/v1/air-quality?latitude={lat}&longitude={lon}&hourly=pm10,pm2_5'
+            aq_res = requests.get(aq_url)
+            if aq_res.status_code != 200:
+                await message.reply("Couldn't fetch air quality data.")
+                return
+
+            aq_data = aq_res.json()
+
+            try:
+                time = aq_data["hourly"]["time"][0]
+                pm10 = aq_data["hourly"]["pm10"][0]
+                pm2_5 = aq_data["hourly"]["pm2_5"][0]
+
+                # Use f-string to construct message properly
+                reply_msg = (
+                    f"**Air Quality for {city_formatted}** (as of {time} UTC):\n"
+                    f"• PM10: `{pm10} µg/m³`\n"
+                    f"• PM2.5: `{pm2_5} µg/m³`\n"
+                    f"(*Source: Open-Meteo*)"
+                )
+                await message.reply(reply_msg)
+                if pm10 <= 54 or pm2_5<=12:
+                    await message.reply("Air quality: Good")
+                if 55 <= pm10 <= 154 or 12<= pm2_5 <= 35.4:
+                    await message.reply("Air quality: Moderate")
+                if 155<= pm10 <= 254 or 35.5<= pm2_5 <= 55.4:
+                    await message.reply("Air quality: Unhealthy for sensitive people")
+                if 255<= pm10 <= 354 or 55.5<= pm2_5 <150.4:
+                    await message.reply("Air quality: Unhealthy")
+                if 355 <= pm10 <= 424 or 150.5<=pm2_5<=250.4:
+                    await message.reply("Air quality: Very Unhealthy")
+                if 425 <= pm10 <= 604 or 250.5<= pm2_5<=350.4:
+                    await message.reply("Air quality: Hazardous")
+                if pm10>605 or pm2_5>350.5:
+                    with open('skeleton.webp',"rb") as f:
+                        picture = discord.File(f)
+                        await message.reply(file=picture)
+
+            except (KeyError, IndexError):
+                await message.reply("Error parsing air quality data.")
+
+
+
+                    
+        
+    
+        
+    
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.role_message_id = 1411428606382444708  # ID of the message that can be reacted to to add/remove a role.
+        self.emoji_to_role = {
+            discord.PartialEmoji(name='🔴'): role id,  
+            discord.PartialEmoji(name='🟡'):role id, 
+        }
+
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
+        """Gives a role based on a reaction emoji."""
+        # Make sure that the message the user is reacting to is the one we care about.
+        if payload.message_id != self.role_message_id:
+            return
+
+        guild = self.get_guild(payload.guild_id)
+        if guild is None:
+            # Check if we're still in the guild and it's cached.
+            return
+
+        try:
+            role_id = self.emoji_to_role[payload.emoji]
+        except KeyError:
+            # If the emoji isn't the one we care about then exit as well.
+            return
+
+        role = guild.get_role(role_id)
+        if role is None:
+            # Make sure the role still exists and is valid.
+            return
+
+        # Tell the type checker that RawReactionActionEvent.member is not none during REACTION_ADD
+        assert payload.member is not None
+
+        try:
+            # Finally, add the role.
+            await payload.member.add_roles(role)
+        except discord.HTTPException:
+            # If we want to do something in case of errors we'd do it here.
+            pass
+
+    async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
+        """Removes a role based on a reaction emoji."""
+        # Make sure that the message the user is reacting to is the one we care about.
+        if payload.message_id != self.role_message_id:
+            return
+
+        guild = self.get_guild(payload.guild_id)
+        if guild is None:
+            # Check if we're still in the guild and it's cached.
+            return
+
+        try:
+            role_id = self.emoji_to_role[payload.emoji]
+        except KeyError:
+            # If the emoji isn't the one we care about then exit as well.
+            return
+
+        role = guild.get_role(role_id)
+        if role is None:
+            # Make sure the role still exists and is valid.
+            return
+
+        # The payload for `on_raw_reaction_remove` does not provide `.member`
+        # so we must get the member ourselves from the payload's `.user_id`.
+        member = guild.get_member(payload.user_id)
+        if member is None:
+            # Make sure the member still exists and is valid.
+            return
+
+        try:
+            # Finally, remove the role.
+            await member.remove_roles(role)
+        except discord.HTTPException:
+            # If we want to do something in case of errors we'd do it here.
+            pass
+
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+client = MyClient(intents=intents)
+client.run('bot token')
